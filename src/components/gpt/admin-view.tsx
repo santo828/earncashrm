@@ -46,7 +46,7 @@ export function AdminView() {
             <h2 className="text-xl font-black flex items-center gap-2">
               Admin Panel <Badge variant="danger">Super Admin</Badge>
             </h2>
-            <p className="text-xs text-white/50">Full platform control • admin@example.com</p>
+            <p className="text-xs text-white/50">Full platform control • hasibulbd694@gmail.com</p>
           </div>
         </div>
         <button
