@@ -1,0 +1,506 @@
+// RewardHive — GPT Offerwall Platform Prisma Schema
+// Full database design for the GPT platform (SQLite for demo; MySQL-compatible models)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ===== Core Auth =====
+model User {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  emailVerified   DateTime?
+  name            String?
+  passwordHash    String?
+  avatar          String?
+  role            String   @default("user") // user | admin
+  level           String   @default("Bronze") // Bronze|Silver|Gold|Platinum|Diamond|VIP
+  xp              Int      @default(0)
+  xpToNext        Int      @default(2500)
+  country         String?
+  referralCode    String   @unique
+  referredById    String?
+  verified        Boolean  @default(false)
+  status          String   @default("active") // active|suspended|banned
+  dailyStreak     Int      @default(0)
+  lastStreakDate  DateTime?
+  twoFactorSecret String?
+  twoFactorEnabled Boolean @default(false)
+  googleId        String?
+  facebookId      String?
+  discordId       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  wallet          Wallet?
+  transactions    Transaction[]
+  offerCompletions OfferCompletion[]
+  surveyCompletions SurveyCompletion[]
+  withdrawals     Withdrawal[]
+  deposits        Deposit[]
+  referralsMade   Referral[]      @relation("Referrer")
+  referralsEarned ReferralEarning[]
+  notifications   Notification[]
+  tickets         Ticket[]
+  ticketReplies   TicketReply[]
+  achievements    AchievementUser[]
+  spinHistory     SpinHistory[]
+  kycRequests     KycRequest[]
+  activityLogs    ActivityLog[]
+  promoUsages     PromoCodeUsage[]
+  contestEntries  ContestEntry[]
+  sessions        Session[]
+
+  @@index([referredById])
+  @@index([status])
+}
+
+model Wallet {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  currentBalance  Float    @default(0)
+  pendingBalance  Float    @default(0)
+  totalEarnings   Float    @default(0)
+  referralEarnings Float   @default(0)
+  lifetimeWithdrawals Float @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  ip        String?
+  userAgent String?
+  lastActive DateTime @default(now())
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+// ===== Offers & Surveys =====
+model ApiProvider {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  type        String   // offers|surveys|both
+  apiKey      String?
+  apiSecret   String?
+  enabled     Boolean  @default(true)
+  totalOffers Int      @default(0)
+  avgPayout   Float    @default(0)
+  config      String?  // JSON string of provider-specific settings
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  offers      Offer[]
+  surveys     Survey[]
+  providerLogs ProviderLog[]
+}
+
+model Offer {
+  id          String   @id @default(cuid())
+  providerId  String
+  provider    ApiProvider @relation(fields: [providerId], references: [id])
+  externalId  String
+  title       String
+  description String?
+  reward      Float
+  category    String
+  difficulty  String   @default("Easy")
+  duration    String?
+  rating      Float    @default(0)
+  completions Int      @default(0)
+  createdAt   DateTime @default(now())
+  completionsList OfferCompletion[]
+}
+
+model OfferCompletion {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  offerId     String?
+  offer       Offer?   @relation(fields: [offerId], references: [id])
+  providerName String
+  title       String
+  reward      Float
+  status      String   @default("pending") // pending|completed|rejected
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+  completedAt DateTime?
+}
+
+model Survey {
+  id          String   @id @default(cuid())
+  providerId  String
+  provider    ApiProvider @relation(fields: [providerId], references: [id])
+  externalId  String
+  title       String
+  reward      Float
+  loi         Int      // length of interview (minutes)
+  rating      Float    @default(0)
+  matchRate   Float    @default(0)
+  createdAt   DateTime @default(now())
+  completions SurveyCompletion[]
+}
+
+model SurveyCompletion {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  surveyId    String?
+  survey      Survey?  @relation(fields: [surveyId], references: [id])
+  providerName String
+  title       String
+  reward      Float
+  status      String   @default("pending")
+  ipAddress   String?
+  fraudFlag   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  completedAt DateTime?
+}
+
+model ProviderLog {
+  id          String   @id @default(cuid())
+  providerId  String
+  provider    ApiProvider @relation(fields: [providerId], references: [id])
+  type        String   // postback|api_call|error
+  message     String
+  payload     String?  // JSON
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+}
+
+// ===== Transactions & Finance =====
+model Transaction {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String   // offer|survey|referral|bonus|withdrawal|deposit|admin
+  title       String
+  amount      Float
+  status      String   @default("completed") // pending|completed|rejected
+  reference   String?
+  createdAt   DateTime @default(now())
+}
+
+model Withdrawal {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  method      String
+  amount      Float
+  fee         Float    @default(0)
+  address     String
+  status      String   @default("pending") // pending|processing|completed|rejected
+  processedBy String?
+  createdAt   DateTime @default(now())
+  processedAt DateTime?
+}
+
+model Deposit {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  method      String
+  amount      Float
+  bonus       Float    @default(0)
+  status      String   @default("pending") // pending|completed|rejected
+  reference   String?
+  createdAt   DateTime @default(now())
+  verifiedAt  DateTime?
+}
+
+model PaymentMethod {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  type        String   // crypto|fiat|mobile
+  icon        String?
+  minAmount   Float    @default(2)
+  fee         Float    @default(0)
+  feeType     String   @default("fixed") // fixed|percent
+  enabled     Boolean  @default(true)
+  processingTime String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ===== Referrals =====
+model Referral {
+  id          String   @id @default(cuid())
+  referrerId  String
+  referrer    User     @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  referredId  String   @unique
+  level       Int      // 1|2|3
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  earnings    ReferralEarning[]
+}
+
+model ReferralEarning {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  referralId  String
+  referral    Referral @relation(fields: [referralId], references: [id], onDelete: Cascade)
+  amount      Float
+  level       Int
+  sourceType  String   // offer|survey|bonus
+  createdAt   DateTime @default(now())
+}
+
+// ===== Promo Codes =====
+model PromoCode {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  type        String   // fixed|percent
+  reward      Float
+  minAmount   Float    @default(0)
+  usageLimit  Int      @default(0) // 0 = unlimited
+  usedCount   Int      @default(0)
+  expiresAt   DateTime?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  usages      PromoCodeUsage[]
+}
+
+model PromoCodeUsage {
+  id          String   @id @default(cuid())
+  promoCodeId String
+  promoCode   PromoCode @relation(fields: [promoCodeId], references: [id])
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reward      Float
+  createdAt   DateTime @default(now())
+  @@unique([promoCodeId, userId])
+}
+
+// ===== Notifications =====
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String   // success|info|warning|reward
+  title       String
+  message     String
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+model Announcement {
+  id          String   @id @default(cuid())
+  title       String
+  message     String
+  type        String   // popup|banner|dashboard
+  active      Boolean  @default(true)
+  startsAt    DateTime?
+  endsAt      DateTime?
+  createdAt   DateTime @default(now())
+}
+
+// ===== Support =====
+model Ticket {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject     String
+  category    String
+  priority    String   @default("medium") // low|medium|high
+  status      String   @default("open") // open|answered|closed
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  replies     TicketReply[]
+}
+
+model TicketReply {
+  id          String   @id @default(cuid())
+  ticketId    String
+  ticket      Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id])
+  author      String   // user|admin
+  name        String
+  message     String
+  attachment  String?
+  createdAt   DateTime @default(now())
+}
+
+// ===== Bonuses & Gamification =====
+model SpinHistory {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String   // wheel|mystery|hourly|daily
+  prize       Float
+  createdAt   DateTime @default(now())
+}
+
+model Achievement {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String
+  icon        String
+  rarity      String   @default("common") // common|rare|epic|legendary
+  reward      Float
+  total       Int
+  users       AchievementUser[]
+}
+
+model AchievementUser {
+  id            String   @id @default(cuid())
+  achievementId String
+  achievement   Achievement @relation(fields: [achievementId], references: [id])
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  progress      Int      @default(0)
+  unlocked      Boolean  @default(false)
+  claimed       Boolean  @default(false)
+  unlockedAt    DateTime?
+  @@unique([achievementId, userId])
+}
+
+// ===== Leaderboard & Contests =====
+model Leaderboard {
+  id          String   @id @default(cuid())
+  userId      String
+  period      String   // weekly|monthly|alltime
+  category    String   // earnings|referrals
+  rank        Int
+  earnings    Float
+  offers      Int
+  referrals   Int
+  updatedAt   DateTime @updatedAt
+}
+
+model Contest {
+  id          String   @id @default(cuid())
+  name        String
+  type        String   // referral|earning
+  period      String   // weekly|monthly
+  prizePool   Float
+  startsAt    DateTime
+  endsAt      DateTime
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  entries     ContestEntry[]
+}
+
+model ContestEntry {
+  id          String   @id @default(cuid())
+  contestId   String
+  contest     Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entries     Int      @default(0)
+  rank        Int?
+  prize       Float    @default(0)
+  updatedAt   DateTime @updatedAt
+  @@unique([contestId, userId])
+}
+
+// ===== KYC =====
+model KycRequest {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String   // national_id|passport|driving_license
+  documentFront String
+  documentBack  String?
+  selfie        String
+  status      String   @default("pending") // pending|reviewing|approved|rejected
+  rejectReason String?
+  reviewedBy  String?
+  createdAt   DateTime @default(now())
+  reviewedAt  DateTime?
+}
+
+// ===== Security & Logs =====
+model ActivityLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  action      String
+  description String?
+  ipAddress   String?
+  userAgent   String?
+  metadata    String?  // JSON
+  createdAt   DateTime @default(now())
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  adminId     String
+  action      String
+  target      String?
+  description String?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+}
+
+// ===== CMS =====
+model Page {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  content     String
+  seoTitle    String?
+  seoDescription String?
+  published   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Blog {
+  id          String   @id @default(cuid())
+  title       String
+  slug        String   @unique
+  excerpt     String?
+  content     String
+  coverImage  String?
+  authorId    String?
+  published   Boolean  @default(true)
+  views       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id])
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  blogs       Blog[]
+}
+
+model Faq {
+  id          String   @id @default(cuid())
+  question    String
+  answer      String
+  category    String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+}
+
+// ===== Settings =====
+model Setting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  group       String   @default("general") // general|payment|offerwall|seo|smtp
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
