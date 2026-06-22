@@ -58,7 +58,7 @@ export const currentUser: User = {
 export const adminUser: User = {
   id: "admin_001",
   name: "Super Admin",
-  email: "admin@example.com",
+  email: "hasibulbd694@gmail.com",
   avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=SuperAdmin",
   level: "VIP",
   xp: 250000,
@@ -78,8 +78,8 @@ export const adminUser: User = {
   isAdminUser: true,
 };
 
-export const ADMIN_EMAIL = "admin@example.com";
-export const ADMIN_PASSWORD = "Admin@123456";
+export const ADMIN_EMAIL = "hasibulbd694@gmail.com";
+export const ADMIN_PASSWORD = "Santo420@#$!";
 
 export const offerProviders: OfferProvider[] = [
   { id: "cpx", name: "CPX Research", logo: "📊", color: "#3B82F6", enabled: true, description: "High-paying surveys and studies from leading market researchers.", totalOffers: 184, avgPayout: 1.85, type: "surveys" },
